@@ -1,6 +1,6 @@
 import { SymbolView } from 'expo-symbols';
 import { Image } from 'expo-image';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import {
   Dimensions,
   Pressable,
@@ -10,9 +10,11 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { Easing, Keyframe } from 'react-native-reanimated';
+import Animated, { Easing, Keyframe, FadeIn, FadeOut, SlideInUp, SlideOutDown } from 'react-native-reanimated';
 
 const blue = '#0863f7';
 const blueDark = '#063a9b';
@@ -76,11 +78,6 @@ const slideUpKF = new Keyframe({
   100: { opacity: 1, transform: [{ translateY: 0 }] },
 });
 
-const sheetKF = new Keyframe({
-  0: { transform: [{ translateY: Dimensions.get('window').height }] },
-  100: { transform: [{ translateY: 0 }] },
-});
-
 export default function TechnicianApp() {
   const [screen, setScreen] = useState('Login');
   const [moreOpen, setMoreOpen] = useState(false);
@@ -115,13 +112,15 @@ export default function TechnicianApp() {
     }
   }, [screen]);
 
+  const closeMore = useCallback(() => setMoreOpen(false), []);
+
   return (
     <View style={styles.root}>
       <SafeAreaView style={styles.safe}>
         <StatusBar barStyle="dark-content" />
         {view}
       </SafeAreaView>
-      <MoreSheet visible={moreOpen} onClose={() => setMoreOpen(false)} go={setScreen} />
+      <MoreSheet visible={moreOpen} onClose={closeMore} go={setScreen} />
     </View>
   );
 }
@@ -418,8 +417,23 @@ function DriverDashboard({ go, onMorePress }) {
   );
 }
 
+const slideOutDownKF = new Keyframe({
+  0: { transform: [{ translateY: 0 }] },
+  100: { transform: [{ translateY: Dimensions.get('window').height }] },
+});
+
 function MoreSheet({ visible, onClose, go }) {
-  if (!visible) return null;
+  const { height } = useWindowDimensions();
+
+  const slideInUpKF = useMemo(() => new Keyframe({
+    0: { transform: [{ translateY: height }] },
+    100: { transform: [{ translateY: 0 }] },
+  }), [height]);
+
+  const slideOutKF = useMemo(() => new Keyframe({
+    0: { transform: [{ translateY: 0 }] },
+    100: { transform: [{ translateY: height }] },
+  }), [height]);
 
   const screens = [
     ['Dashboard', 'Dashboard', 'house.fill'],
@@ -435,30 +449,49 @@ function MoreSheet({ visible, onClose, go }) {
     ['Driver Dashboard', 'Driver', 'truck.box.fill'],
   ];
 
+  if (!visible) return null;
+
   return (
-    <Animated.View style={styles.moreOverlay}>
+    <Animated.View
+      style={styles.moreOverlay}
+      entering={FadeIn.duration(200)}
+      exiting={FadeOut.duration(200)}
+    >
       <Pressable style={styles.moreBackdrop} onPress={onClose} />
-      <Animated.View entering={sheetKF.duration(400)} style={styles.moreSheet}>
+      <Animated.View
+        entering={slideInUpKF.duration(400)}
+        exiting={slideOutKF.duration(300)}
+        style={styles.moreSheet}
+      >
         <View style={styles.moreHandle} />
         <Text style={styles.moreTitle}>All Screens</Text>
-        <View style={styles.moreGrid}>
-          {screens.map(([label, target, icon]) => (
-            <Pressable
-              key={target}
-              onPress={() => { go(target); onClose(); }}
-              style={styles.moreItem}
-            >
-              <View style={styles.moreIconBox}>
-                <Icon ios={icon} android="apps" size={22} color={blue} />
-              </View>
-              <Text style={styles.moreItemText}>{label}</Text>
-            </Pressable>
-          ))}
-        </View>
-        <Pressable onPress={() => { go('Login'); onClose(); }} style={styles.moreLogout}>
-          <Icon ios="rectangle.portrait.and.arrow.right" android="logout" size={18} color={red} />
-          <Text style={styles.moreLogoutText}>Logout</Text>
-        </Pressable>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.moreScroll}
+          bounces={false}
+        >
+          <View style={styles.moreGrid}>
+            {screens.map(([label, target, icon]) => (
+              <Pressable
+                key={target}
+                onPress={() => { go(target); onClose(); }}
+                style={({ pressed }) => [styles.moreItem, pressed && styles.pressed]}
+              >
+                <View style={styles.moreIconBox}>
+                  <Icon ios={icon} android="apps" size={22} color={blue} />
+                </View>
+                <Text style={styles.moreItemText}>{label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <Pressable
+            onPress={() => { go('Login'); onClose(); }}
+            style={({ pressed }) => [styles.moreLogout, pressed && styles.pressed]}
+          >
+            <Icon ios="rectangle.portrait.and.arrow.right" android="logout" size={18} color={red} />
+            <Text style={styles.moreLogoutText}>Logout</Text>
+          </Pressable>
+        </ScrollView>
       </Animated.View>
     </Animated.View>
   );
@@ -535,7 +568,7 @@ function BottomNav({ active, go, driver, onMorePress }) {
           <Pressable
             key={label}
             onPress={() => (label === 'More' ? onMorePress?.() : go(target))}
-            style={styles.navItem}
+            style={({ pressed }) => [styles.navItem, pressed && styles.pressed]}
           >
             <Icon ios={ios} android={android} size={22} color={selected ? blue : '#66728c'} />
             <Text style={[styles.navLabel, selected && styles.navLabelActive]}>{label}</Text>
@@ -580,7 +613,7 @@ function Metric({ label, value, icon }) {
 
 function QuickTile({ label, value, icon, onPress }) {
   return (
-    <Pressable onPress={onPress} style={styles.quickTile}>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.quickTile, pressed && styles.pressed]}>
       <View style={styles.iconCircle}>
         <Icon ios={icon} android="build" size={22} color={blue} />
       </View>
@@ -592,7 +625,7 @@ function QuickTile({ label, value, icon, onPress }) {
 
 function ActionPill({ label, icon, onPress }) {
   return (
-    <Pressable onPress={onPress} style={styles.actionPill}>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.actionPill, pressed && styles.pressed]}>
       <Icon ios={icon} android="apps" size={17} color={blue} />
       <Text style={styles.actionText}>{label}</Text>
     </Pressable>
@@ -634,7 +667,7 @@ function Segments({ labels }) {
 function TaskCard({ job, compact, onPress }) {
   const [time, title, customer, place, status, tone] = job;
   return (
-    <Pressable onPress={onPress} style={[styles.taskCard, compact && styles.taskCompact]}>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.taskCard, compact && styles.taskCompact, pressed && styles.pressed]}>
       <View style={styles.flex}>
         <Text style={styles.itemTitle}>{title}</Text>
         <Text style={styles.itemMeta}>{customer}</Text>
@@ -747,6 +780,10 @@ function initials(name) {
     .join('');
 }
 
+const MARGIN = 18;
+const BOTTOM_NAV_H = 76;
+const GAP = 15;
+
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
@@ -757,9 +794,9 @@ const styles = StyleSheet.create({
     backgroundColor: page,
   },
   content: {
-    padding: 18,
-    paddingBottom: 98,
-    gap: 15,
+    padding: MARGIN,
+    paddingBottom: BOTTOM_NAV_H + MARGIN,
+    gap: GAP,
   },
   flex: {
     flex: 1,
@@ -1482,7 +1519,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: 76,
+    height: BOTTOM_NAV_H,
     backgroundColor: surface,
     borderTopColor: line,
     borderTopWidth: 1,
@@ -1521,6 +1558,9 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 40,
     maxHeight: '80%',
+  },
+  moreScroll: {
+    gap: 0,
   },
   moreHandle: {
     width: 40,
